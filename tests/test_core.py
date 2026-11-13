@@ -451,3 +451,39 @@ def test_dispatch_routes_web_tool(dbp, monkeypatch):
     monkeypatch.setattr(tools, "search_web_knowledge", lambda query, lang="ar": {"title": query})
     assert tools.dispatch("search_web_knowledge", {"query": "Luxor"}, dbp) == {"title": "Luxor"}
     assert any(s["function"]["name"] == "search_web_knowledge" for s in tools.TOOL_SPECS)
+
+
+# ---- frequently asked questions ------------------------------------------------
+from bot import faq as faq_module  # noqa: E402
+
+
+def test_faq_file_parses_and_answers():
+    f = faq_module.FAQ(config.FAQ_PATH)
+    assert len(f.entries) >= 8 and all(e["questions"] and e["answer"] for e in f.entries)
+    assert "126" in f.match("رقم شرطة السياحة كام؟")
+    assert "126" in f.match("لو سمحت ايه ارقام الطوارئ في مصر")
+    assert "تجريبي" in f.match("هل الحجز حقيقي")
+    assert "TB" in f.match("ازاي الغي الحجز")
+    assert "ديمتريوس" in f.match("ليه اسمك ديمو")
+    assert "التأشيرة" in f.match("محتاج فيزا؟") and "رفيق" in f.match("بتعمل ايه")
+    assert "126" in f.match("Emergency numbers in Egypt?")
+    assert len(f.questions(3)) == 3 and f.questions()[0] == f.entries[0]["questions"][0]
+
+
+@pytest.mark.parametrize("text", [
+    "احكيلي عن قلعة قايتباي", "الجو عامل إيه في أسوان؟", "عايز فندق في الأقصر بأقل من 2000 جنيه",
+    "أروح فين في إسكندرية في يومين؟", "What tours can I book in Luxor?", "الغي الحجز TB-A1B2C3",
+    "مين هو نجيب محفوظ", "", "؟؟",
+])
+def test_faq_does_not_hijack_other_questions(text):
+    assert faq_module.FAQ(config.FAQ_PATH).match(text) is None
+
+
+def test_faq_parser_is_forgiving(tmp_path):
+    path = tmp_path / "faq.txt"
+    path.write_text("# note\n\nس: سؤال اول\nس :صيغة تانية\nج: سطر واحد\nسطر اتنين\n\nفقرة جديدة\n"
+                    "س: سؤال بدون اجابة\n\nQ: english one\nA: yes\n\nج: اجابة بدون سؤال\n", encoding="utf-8")
+    entries = faq_module.parse(path.read_text(encoding="utf-8"))
+    assert [e["questions"] for e in entries] == [["سؤال اول", "صيغة تانية"], ["english one"]]
+    assert entries[0]["answer"] == "سطر واحد\nسطر اتنين\n\nفقرة جديدة" and entries[1]["answer"] == "yes"
+    assert faq_module.FAQ(tmp_path / "missing.txt").match("anything") is None

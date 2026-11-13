@@ -213,11 +213,6 @@ class SimpleAgent:
                 "أو اسأل عن الجو أو الفنادق أو الجولات.")
             return result
         top = hits[0]["doc"]
-        title = f"{top['title_en']} ({top['title_ar']})" if en else top["title_ar"]
-        text = f"**{title}**\n\n{top['text']}"
-        if len(hits) > 1:
-            more = " · ".join((h["doc"]["title_en"] if en else h["doc"]["title_ar"])
-                              for h in hits[1:])
-            text += ("\n\nRelated topics: " if en else "\n\nمواضيع قريبة: ") + more
-        result.text = text
+        # Straight to the answer; English readers also get the English name of the topic.
+        result.text = f"**{top['title_en']}**\n\n{top['text']}" if en else top["text"]
         return result

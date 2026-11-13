@@ -6,7 +6,8 @@ import streamlit as st
 import brand
 import config
 from bot import db, tools
-from bot.agent import TourismAgent
+from bot.agent import AgentResult, TourismAgent
+from bot.faq import FAQ
 from bot.llm import OllamaClient, OllamaError
 from bot.rag import KnowledgeBase
 from bot.simple import SimpleAgent, format_booking
@@ -33,7 +34,7 @@ EXAMPLES = [
 def code_version() -> float:
     """Changes whenever the bot's code or knowledge base changes, so the cached
     bot below is rebuilt after an update instead of serving the old version."""
-    files = list((config.BASE_DIR / "bot").glob("*.py")) + [config.KNOWLEDGE_PATH]
+    files = list((config.BASE_DIR / "bot").glob("*.py")) + [config.KNOWLEDGE_PATH, config.FAQ_PATH]
     return max(f.stat().st_mtime for f in files)
 
 
@@ -43,10 +44,11 @@ def load_bot(version: float):
                           num_ctx=config.NUM_CTX, temperature=config.TEMPERATURE)
     db.init_db(config.DB_PATH)
     kb = KnowledgeBase(config.KNOWLEDGE_PATH, client=client, cache_path=config.EMB_CACHE_PATH)
-    return client, kb, TourismAgent(client, kb, config.DB_PATH), SimpleAgent(kb, config.DB_PATH)
+    return (client, kb, TourismAgent(client, kb, config.DB_PATH),
+            SimpleAgent(kb, config.DB_PATH), FAQ(config.FAQ_PATH))
 
 
-client, kb, ai_agent, simple_agent = load_bot(code_version())
+client, kb, ai_agent, simple_agent, faq = load_bot(code_version())
 ai_ready = client.is_up() and client.has_model(config.CHAT_MODEL)
 
 if "messages" not in st.session_state:
@@ -74,6 +76,11 @@ with st.sidebar:
             f"- قاعدة المعرفة المحلية ({len(kb.docs)} موضوعًا)\n"
             "- ويكيبيديا العربية\n- Wikipedia الإنجليزية\n- Wikivoyage (دليل سفر)\n"
             "- Open-Meteo و wttr.in (الطقس)\n- قاعدة بيانات الحجوزات (SQLite)")
+
+    st.header("الأسئلة الشائعة")
+    for i, question in enumerate(faq.questions()):
+        if st.button(question, key=f"faq_{i}", use_container_width=True):
+            st.session_state.pending = question
 
     st.header("جرّب")
     for example in EXAMPLES:
@@ -131,31 +138,18 @@ st.markdown(brand.hero_html(config.BOT_NAME, "رفيق رحلتك في مصر: �
                             latin="DEMO AI"), unsafe_allow_html=True)
 
 
-def show_details(message: dict) -> None:
-    if message.get("sources") or message.get("tool_events"):
-        with st.expander("كيف وصل البوت للرد؟"):
-            if message.get("mode"):
-                st.caption(message["mode"])
-            if message.get("sources"):
-                st.markdown("**من قاعدة المعرفة:** " + "، ".join(message["sources"]))
-            for event in message.get("tool_events", []):
-                st.markdown(f"**أداة:** `{event['tool']}`")
-                st.json({"args": event["args"], "result": event["result"]}, expanded=False)
-
-
 for message in st.session_state.messages:
     if message["role"] == "user":
         st.markdown(brand.user_bubble(message["content"]), unsafe_allow_html=True)
         continue
     with st.chat_message("assistant", avatar=brand.ICON):
         st.markdown(message["content"])
-        show_details(message)
 
 # Starter questions under the welcome message (the sidebar is hidden on phones).
 if len(st.session_state.messages) == 1:
-    st.markdown('<div class="nb-hint">جرّب واحد من دول:</div>', unsafe_allow_html=True)
+    st.markdown('<div class="nb-hint">أسئلة شائعة:</div>', unsafe_allow_html=True)
     columns = st.columns(2)
-    for i, example in enumerate(EXAMPLES[:4]):
+    for i, example in enumerate((faq.questions(2) + EXAMPLES)[:4]):
         if columns[i % 2].button(example, key=f"start_{i}", use_container_width=True):
             st.session_state.pending = example
 
@@ -167,15 +161,16 @@ if prompt:
     st.markdown(brand.user_bubble(prompt), unsafe_allow_html=True)
     with st.chat_message("assistant", avatar=brand.ICON):
         with st.spinner("بفكر..."):
-            mode = f"وضع الذكاء الاصطناعي ({config.CHAT_MODEL})"
-            try:
-                if not ai_ready:
-                    raise OllamaError("model not available")
-                result = ai_agent.reply(history, prompt)
-            except OllamaError:
-                mode = "الوضع البسيط (بدون موديل)"
-                result = simple_agent.reply(history, prompt)
+            stored = faq.match(prompt)  # a frequently asked question: answer it as written
+            if stored:
+                result = AgentResult(text=stored)
+            else:
+                try:
+                    if not ai_ready:
+                        raise OllamaError("model not available")
+                    result = ai_agent.reply(history, prompt)
+                except OllamaError:
+                    result = simple_agent.reply(history, prompt)
     st.session_state.messages.append(
-        {"role": "assistant", "content": result.text, "sources": result.sources,
-         "tool_events": result.tool_events, "mode": mode})
+        {"role": "assistant", "content": result.text})
     st.rerun()
