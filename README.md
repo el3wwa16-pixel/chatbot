@@ -93,7 +93,7 @@ streamlit run app.py
      ├── رد مباشر (معلومة / برنامج رحلة)
      │
      └── استدعاء أداة (Tool calling):
-           get_weather        ← Open-Meteo (مجاني بدون مفتاح)
+           get_weather        ← Open-Meteo، و wttr.in كبديل (مجاني بدون مفتاح)
            search_hotels / search_tours / create_booking
            get_booking / cancel_booking          ← SQLite
            handoff_to_human   ← تذكرة لموظف خدمة العملاء
@@ -122,7 +122,7 @@ streamlit run app.py
 | `bot/llm.py` | الاتصال بـ Ollama |
 | `bot/cities.py`, `bot/textutil.py` | أسماء المدن ومعالجة النص العربي |
 | `data/knowledge.json` | قاعدة المعرفة (49 موضوعًا) |
-| `tests/test_core.py` | 57 اختبارًا آليًا (`pip install -r requirements-dev.txt` ثم `pytest -q`) |
+| `tests/test_core.py` | 58 اختبارًا آليًا (`pip install -r requirements-dev.txt` ثم `pytest -q`) |
 | `run.bat`, `run.sh` | تشغيل بضغطة واحدة |
 | `check_setup.py` | فحص الجاهزية |
 

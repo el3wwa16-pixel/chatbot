@@ -190,7 +190,7 @@ class _Resp:
 def test_weather_known_city(monkeypatch):
     seen = {}
 
-    def fake_get(url, params=None, timeout=None):
+    def fake_get(url, params=None, timeout=None, headers=None):
         seen["url"], seen["params"] = url, params
         return _Resp({"current": {"temperature_2m": 31.5, "weather_code": 0, "wind_speed_10m": 9},
                       "daily": {"time": ["2026-11-13"], "temperature_2m_max": [33],
@@ -352,3 +352,18 @@ def test_simple_mode_top_answer(simple, query, expected_id):
     kb = simple.kb
     top = kb.search(query, k=3, prefer_city=canonical_city(query))[0]["doc"]["id"]
     assert top == expected_id
+
+
+def test_weather_falls_back_to_second_provider(monkeypatch):
+    def fake_get(url, params=None, timeout=None, headers=None):
+        if "open-meteo" in url:
+            return _Resp({"error": True, "reason": "limit exceeded"})
+        return _Resp({"current_condition": [{"temp_C": "29", "windspeedKmph": "11",
+                                             "weatherDesc": [{"value": "Sunny"}]}],
+                      "weather": [{"date": "2026-11-13", "maxtempC": "31", "mintempC": "17",
+                                   "hourly": [{"chanceofrain": "0"}, {"chanceofrain": "5"}]}]})
+    monkeypatch.setattr(tools.requests, "get", fake_get)
+    out = tools.get_weather("Aswan")
+    assert out["source"] == "wttr.in" and out["now"]["temperature_c"] == 29.0
+    assert out["forecast"][0] == {"date": "2026-11-13", "max_c": 31.0, "min_c": 17.0,
+                                  "rain_chance_percent": 5}

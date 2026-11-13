@@ -28,38 +28,67 @@ def _int(value, default=None):
         return default
 
 
-# ---- weather (Open-Meteo: free, no key) --------------------------------
+# ---- weather (free, no key: Open-Meteo first, wttr.in as backup) ---------
+_HEADERS = {"User-Agent": "rafiq-tourism-chatbot (student project)"}
+
+
+def _open_meteo(lat: float, lon: float) -> dict:
+    w = requests.get("https://api.open-meteo.com/v1/forecast", params={
+        "latitude": lat, "longitude": lon, "timezone": "auto", "forecast_days": 3,
+        "current": "temperature_2m,weather_code,wind_speed_10m",
+        "daily": "temperature_2m_max,temperature_2m_min,precipitation_probability_max",
+    }, headers=_HEADERS, timeout=10).json()
+    cur, daily = w["current"], w["daily"]
+    return {
+        "source": "Open-Meteo",
+        "now": {"temperature_c": cur["temperature_2m"],
+                "condition": WEATHER_CODES.get(cur.get("weather_code"), "غير محدد"),
+                "wind_kmh": cur.get("wind_speed_10m")},
+        "forecast": [
+            {"date": d, "max_c": hi, "min_c": lo, "rain_chance_percent": rain}
+            for d, hi, lo, rain in zip(daily["time"], daily["temperature_2m_max"],
+                                       daily["temperature_2m_min"],
+                                       daily["precipitation_probability_max"])],
+    }
+
+
+def _wttr(lat: float, lon: float) -> dict:
+    w = requests.get(f"https://wttr.in/{lat},{lon}", params={"format": "j1"},
+                     headers=_HEADERS, timeout=10).json()
+    cur = w["current_condition"][0]
+    return {
+        "source": "wttr.in",
+        "now": {"temperature_c": float(cur["temp_C"]),
+                "condition": cur["weatherDesc"][0]["value"],
+                "wind_kmh": float(cur["windspeedKmph"])},
+        "forecast": [
+            {"date": d["date"], "max_c": float(d["maxtempC"]), "min_c": float(d["mintempC"]),
+             "rain_chance_percent": max(int(h.get("chanceofrain", 0)) for h in d["hourly"])}
+            for d in w["weather"][:3]],
+    }
+
+
 def get_weather(city: str) -> dict:
     name = canonical_city(city)
-    try:
-        if name:
-            lat, lon = CITIES[name]["lat"], CITIES[name]["lon"]
-        else:
+    if name:
+        lat, lon = CITIES[name]["lat"], CITIES[name]["lon"]
+    else:
+        try:
             g = requests.get("https://geocoding-api.open-meteo.com/v1/search",
-                             params={"name": city, "count": 1}, timeout=10).json()
-            if not g.get("results"):
-                return {"error": f"City not found: {city}"}
+                             params={"name": city, "count": 1},
+                             headers=_HEADERS, timeout=10).json()
             hit = g["results"][0]
             name, lat, lon = hit["name"], hit["latitude"], hit["longitude"]
-        w = requests.get("https://api.open-meteo.com/v1/forecast", params={
-            "latitude": lat, "longitude": lon, "timezone": "auto", "forecast_days": 3,
-            "current": "temperature_2m,weather_code,wind_speed_10m",
-            "daily": "temperature_2m_max,temperature_2m_min,precipitation_probability_max",
-        }, timeout=10).json()
-        cur, daily = w["current"], w["daily"]
-        return {
-            "city": name,
-            "now": {"temperature_c": cur["temperature_2m"],
-                    "condition": WEATHER_CODES.get(cur.get("weather_code"), "غير محدد"),
-                    "wind_kmh": cur.get("wind_speed_10m")},
-            "forecast": [
-                {"date": d, "max_c": hi, "min_c": lo, "rain_chance_percent": rain}
-                for d, hi, lo, rain in zip(daily["time"], daily["temperature_2m_max"],
-                                           daily["temperature_2m_min"],
-                                           daily["precipitation_probability_max"])],
-        }
-    except (requests.RequestException, KeyError, ValueError):
-        return {"error": "Weather service is unavailable right now (needs internet)."}
+        except (requests.RequestException, KeyError, IndexError, ValueError, TypeError):
+            return {"error": f"City not found: {city}"}
+    problems = []
+    for provider in (_open_meteo, _wttr):
+        try:
+            return {"city": name, **provider(lat, lon)}
+        except (requests.RequestException, KeyError, IndexError, ValueError, TypeError) as e:
+            problems.append(f"{provider.__name__.strip('_')}: {type(e).__name__}")
+    return {"error": "Weather service is unavailable right now (needs internet).",
+            "detail": "; ".join(problems)}
 
 
 # ---- catalogue ---------------------------------------------------------
