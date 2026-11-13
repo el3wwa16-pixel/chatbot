@@ -65,9 +65,16 @@ class FAQ:
         self.entries = parse(path.read_text(encoding="utf-8")) if path.exists() else []
         self._index = [(set(tokenize(q)), e) for e in self.entries for q in e["questions"]]
 
-    def questions(self, limit: int | None = None) -> list[str]:
-        """The first wording of each question, for showing as buttons."""
-        first = [e["questions"][0] for e in self.entries]
+    def questions(self, limit: int | None = None, lang: str = "ar") -> list[str]:
+        """One wording of each question, for showing as buttons: the first one,
+        or for English the first wording written in Latin letters."""
+        def pick(entry):
+            if lang == "en":
+                for q in entry["questions"]:
+                    if sum(c.isascii() and c.isalpha() for c in q) > len(q) / 2:
+                        return q
+            return entry["questions"][0]
+        first = [pick(e) for e in self.entries]
         return first[:limit] if limit else first
 
     def match(self, text: str) -> str | None:

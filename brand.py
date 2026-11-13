@@ -68,6 +68,29 @@ html, body, [data-testid="stAppViewContainer"], [data-testid="stSidebar"],
            color: {GOLD}; opacity: .85; text-align: right; }}
 .nb-tag {{ font-size: 16px; color: {PAPYRUS}; opacity: .9; text-align: right; margin-top: 4px; }}
 
+/* tool pages: text follows its own direction; navigation as gold pills */
+[data-testid="stMarkdownContainer"] p, [data-testid="stMarkdownContainer"] li,
+[data-testid="stMarkdownContainer"] td, [data-testid="stMarkdownContainer"] th,
+[data-testid="stWidgetLabel"] p {{ unicode-bidi: plaintext; text-align: start; }}
+[data-testid="stMarkdownContainer"] table {{ width: 100%; direction: rtl; }}
+[data-testid="stMarkdownContainer"] th {{ background: {NIGHT}; color: {GOLD}; }}
+[data-testid="stMarkdownContainer"] td {{ background: rgba(255, 255, 255, .6); }}
+[data-testid="stMain"] [role="radiogroup"] {{ gap: 8px; flex-wrap: wrap; direction: rtl; margin-bottom: 8px; }}
+[data-testid="stMain"] [role="radiogroup"] label {{
+    border: 1.5px solid {GOLD}; border-radius: 999px; padding: 5px 14px;
+    background: rgba(255, 255, 255, .55); box-shadow: {SHADOW}; cursor: pointer;
+}}
+[data-testid="stMain"] [role="radiogroup"] label:has(input:checked) {{ background: {NIGHT}; }}
+[data-testid="stMain"] [role="radiogroup"] label:has(input:checked) p {{ color: {GOLD}; font-weight: 700; }}
+[data-testid="stMain"] [role="radiogroup"] label > div:first-child {{ display: none; }}
+[data-testid="stMetricValue"] {{ color: {NIGHT}; }}
+.nb-day {{ direction: rtl; background: {BOT}; border-radius: {RADIUS}; padding: 14px 18px;
+           margin: 0 0 12px; box-shadow: {SHADOW}; animation: nb-in .45s ease both; }}
+.nb-day h4 {{ margin: 0 0 8px; color: {NIGHT}; font-family: 'Cairo', sans-serif; text-align: right; }}
+.nb-day p {{ margin: 4px 0; color: {NIGHT}; line-height: 1.7; text-align: right; }}
+.nb-day b {{ color: {NIGHT}; }}
+.nb-day span {{ color: #7A6420; font-weight: 700; }}
+
 /* headings */
 h2, h3 {{ color: {NIGHT}; font-family: 'Cairo', 'Cinzel', serif; }}
 [data-testid="stSidebar"] h2 {{ font-size: 19px; border-bottom: 2px solid {GOLD};

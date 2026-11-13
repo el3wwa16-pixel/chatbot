@@ -53,6 +53,7 @@ class AgentResult:
     sources: list[str] = field(default_factory=list)
     tool_events: list[dict] = field(default_factory=list)
     search_mode: str = "keyword"
+    answered: bool = True  # False when nothing was found for the question
 
 
 class TourismAgent:

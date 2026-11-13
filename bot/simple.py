@@ -206,6 +206,7 @@ class SimpleAgent:
                 return result
         result.sources = [h["doc"].get("title_ar", "") for h in hits]
         if not hits:
+            result.answered = False
             result.text = (
                 "I could not find that in my knowledge base. Try a place name such as Karnak, "
                 "or ask about the weather, hotels or tours." if en else

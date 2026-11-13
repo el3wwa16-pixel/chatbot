@@ -19,6 +19,10 @@ CREATE TABLE IF NOT EXISTS bookings (
     total_egp INTEGER, status TEXT, created_at TEXT);
 CREATE TABLE IF NOT EXISTS handoffs (
     id INTEGER PRIMARY KEY AUTOINCREMENT, reason TEXT, created_at TEXT);
+CREATE TABLE IF NOT EXISTS questions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, text TEXT, source TEXT, created_at TEXT);
+CREATE TABLE IF NOT EXISTS feedback (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, question TEXT, rating INTEGER, created_at TEXT);
 """
 
 HOTELS = [
@@ -100,3 +104,45 @@ def list_bookings(db_path) -> list[dict]:
 
 def list_handoffs(db_path) -> list[dict]:
     return query(db_path, "SELECT * FROM handoffs ORDER BY id DESC")
+
+
+# ---- usage statistics --------------------------------------------------------
+SOURCES = ("faq", "knowledge", "web", "tool", "model", "none")
+
+
+def log_question(db_path, text: str, source: str) -> None:
+    """source: where the answer came from (one of SOURCES); 'none' = no answer found."""
+    from datetime import datetime
+    execute(db_path, "INSERT INTO questions (text, source, created_at) VALUES (?, ?, ?)",
+            (str(text)[:300], source if source in SOURCES else "none",
+             datetime.now().isoformat(timespec="seconds")))
+
+
+def log_feedback(db_path, question: str, rating: int) -> None:
+    """rating: 1 = helpful, 0 = not helpful."""
+    from datetime import datetime
+    execute(db_path, "INSERT INTO feedback (question, rating, created_at) VALUES (?, ?, ?)",
+            (str(question)[:300], 1 if rating else 0, datetime.now().isoformat(timespec="seconds")))
+
+
+def stats(db_path) -> dict:
+    one = lambda sql: query(db_path, sql)[0]["n"]  # noqa: E731
+    return {
+        "questions": one("SELECT COUNT(*) AS n FROM questions"),
+        "unanswered": one("SELECT COUNT(*) AS n FROM questions WHERE source = 'none'"),
+        "bookings": one("SELECT COUNT(*) AS n FROM bookings"),
+        "cancelled": one("SELECT COUNT(*) AS n FROM bookings WHERE status = 'cancelled'"),
+        "handoffs": one("SELECT COUNT(*) AS n FROM handoffs"),
+        "likes": one("SELECT COUNT(*) AS n FROM feedback WHERE rating = 1"),
+        "dislikes": one("SELECT COUNT(*) AS n FROM feedback WHERE rating = 0"),
+        "by_source": {r["source"]: r["n"] for r in query(
+            db_path, "SELECT source, COUNT(*) AS n FROM questions GROUP BY source")},
+        "top_questions": query(
+            db_path, "SELECT text, COUNT(*) AS n FROM questions GROUP BY text ORDER BY n DESC, text LIMIT 10"),
+        "unanswered_list": query(
+            db_path, "SELECT text, COUNT(*) AS n FROM questions WHERE source = 'none' "
+                     "GROUP BY text ORDER BY n DESC, text LIMIT 10"),
+        "disliked_list": query(
+            db_path, "SELECT question AS text, COUNT(*) AS n FROM feedback WHERE rating = 0 "
+                     "GROUP BY question ORDER BY n DESC LIMIT 10"),
+    }
