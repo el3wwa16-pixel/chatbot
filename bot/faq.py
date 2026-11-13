@@ -11,7 +11,7 @@ the lines from "ج:" onward are the answer. Lines starting with # are ignored.
 import re
 from pathlib import Path
 
-from .textutil import tokenize
+from .textutil import normalize, tokenize
 
 _Q = ("س:", "س :", "Q:", "q:")
 _A = ("ج:", "ج :", "A:", "a:")
@@ -64,6 +64,13 @@ class FAQ:
         path = Path(path)
         self.entries = parse(path.read_text(encoding="utf-8")) if path.exists() else []
         self._index = [(set(tokenize(q)), e) for e in self.entries for q in e["questions"]]
+        # Questions made only of common words ("What can you do?") have no keywords left,
+        # so they are matched by their exact wording instead.
+        self._exact = {self._plain(q): e for e in self.entries for q in e["questions"]}
+
+    @staticmethod
+    def _plain(text: str) -> str:
+        return " ".join(re.findall(r"[^\W_]+", normalize(text)))
 
     def questions(self, limit: int | None = None, lang: str = "ar") -> list[str]:
         """One wording of each question, for showing as buttons: the first one,
@@ -79,8 +86,13 @@ class FAQ:
 
     def match(self, text: str) -> str | None:
         """The stored answer when the text is close enough to a known question."""
+        if _BOOKING_REF.search(text):
+            return None
+        exact = self._exact.get(self._plain(text))
+        if exact:
+            return exact["answer"]
         words = set(tokenize(text))
-        if not words or _BOOKING_REF.search(text):
+        if not words:
             return None
         best, answer = 0.0, None
         for known, entry in self._index:

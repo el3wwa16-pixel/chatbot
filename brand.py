@@ -82,7 +82,7 @@ div[role="radiogroup"] label {{
 }}
 div[role="radiogroup"] label:has(input:checked) {{ background: {NIGHT}; }}
 div[role="radiogroup"] label:has(input:checked) p {{ color: {GOLD}; font-weight: 700; }}
-div[role="radiogroup"] label > div:first-child {{ display: none; }}
+div[role="radiogroup"] label > div:first-child {{ display: none !important; }}
 div[role="radiogroup"] label p {{ color: {NIGHT}; font-size: 15px; }}
 [data-testid="stMetricValue"] {{ color: {NIGHT}; }}
 .nb-day {{ direction: rtl; background: {BOT}; border-radius: {RADIUS}; padding: 14px 18px;

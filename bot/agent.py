@@ -62,7 +62,7 @@ class TourismAgent:
         self.kb = kb
         self.db_path = db_path
 
-    def _system(self, hits: list[dict]) -> str:
+    def _system(self, hits: list[dict], about_user: str = "") -> str:
         if hits:
             knowledge = "\n\n".join(
                 f"[{i}] {h['doc'].get('title_ar', '')} ({h['doc'].get('title_en', '')}) "
@@ -70,17 +70,19 @@ class TourismAgent:
                 for i, h in enumerate(hits, 1))
         else:
             knowledge = "(nothing relevant found in the knowledge base)"
-        return SYSTEM_PROMPT.format(bot_name=config.BOT_NAME, today=date.today().isoformat(),
-                                    cities=", ".join(CITIES), knowledge=knowledge)
+        prompt = SYSTEM_PROMPT.format(bot_name=config.BOT_NAME, today=date.today().isoformat(),
+                                      cities=", ".join(CITIES), knowledge=knowledge)
+        return prompt + (f"\nTRAVELLER\n{about_user}\n" if about_user else "")
 
-    def reply(self, history: list[dict], user_text: str) -> AgentResult:
-        """history: earlier [{'role': 'user'|'assistant', 'content': str}] messages."""
+    def reply(self, history: list[dict], user_text: str, about_user: str = "") -> AgentResult:
+        """history: earlier [{'role': 'user'|'assistant', 'content': str}] messages.
+        about_user: what the traveller said about themselves (name, travelling with children)."""
         hits = self.kb.search(user_text, k=config.TOP_K,
                               prefer_city=canonical_city(user_text))
         result = AgentResult(text="", search_mode=self.kb.mode,
                              sources=[h["doc"].get("title_ar", "") for h in hits])
 
-        messages = [{"role": "system", "content": self._system(hits)}]
+        messages = [{"role": "system", "content": self._system(hits, about_user)}]
         messages += [{"role": m["role"], "content": m["content"]}
                      for m in history[-config.HISTORY_MESSAGES:]
                      if m.get("role") in ("user", "assistant") and m.get("content")]

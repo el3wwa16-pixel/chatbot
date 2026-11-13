@@ -676,3 +676,158 @@ def test_cloud_client_errors_and_transcribe(monkeypatch):
         client.chat([{"role": "user", "content": "hi"}])
     monkeypatch.setattr(cloud_llm.requests, "post", lambda *a, **k: _Post(200, {"text": " الجو في أسوان "}))
     assert client.transcribe(b"audio") == "الجو في أسوان"
+
+
+# ---- travel helpers, memory, accuracy check, survey, Telegram ---------------------------
+from datetime import date as _date  # noqa: E402
+
+from bot import channel, evaluate, profile, travel  # noqa: E402
+
+
+def test_distance_and_nearest():
+    assert 175 < travel.distance_km(30.0444, 31.2357, 31.2001, 29.9187) < 185  # Cairo to Alexandria
+    assert travel.distance_km(25.7, 32.6, 25.7, 32.6) == 0
+    docs = _docs()
+    qaitbay = next(d for d in docs if d["id"] == "qaitbay")
+    close = travel.nearest(docs, qaitbay["lat"], qaitbay["lon"], 3, exclude_id="qaitbay")
+    assert [c["doc"]["id"] for c in close][0] == "mursi-abu-al-abbas" and close[0]["km"] < 2
+    assert [c["km"] for c in close] == sorted(c["km"] for c in close)
+    assert all(c["doc"]["city"] == "Alexandria" for c in close)
+
+
+def test_routes_are_symmetric_and_labelled():
+    there, back = travel.route("Cairo", "Luxor"), travel.route("Luxor", "Cairo")
+    assert there == back and {o["mode"] for o in there} == {"flight", "sleeper"}
+    assert travel.route("Siwa", "Aswan") == [] and travel.route("Cairo", "Cairo") == []
+    for options in travel._ROUTES.values():
+        assert all(mode in travel.MODES and duration for mode, duration, _ in options)
+    for a, b in travel._ROUTES:
+        assert canonical_city(a) == a and canonical_city(b) == b
+
+
+def test_packing_list_changes_with_place_and_season():
+    beach_summer = travel.packing_list("Hurghada", 7, "ar")
+    alex_winter = travel.packing_list("Alexandria", 1, "ar")
+    assert any("مايوه" in i for i in beach_summer) and not any("مايوه" in i for i in alex_winter)
+    assert any("مطر" in i for i in alex_winter) and any("قبعة" in i for i in beach_summer)
+    assert any("Warm clothes" in i for i in travel.packing_list("Siwa", 12, "en"))
+    assert (travel.season(1), travel.season(7), travel.season(4)) == ("winter", "summer", "mild")
+    assert len(travel.packing_list("Cairo", 4, "en")) == len(travel.packing_list("Cairo", 4, "ar"))
+
+
+def test_holidays_and_prayer_times(monkeypatch):
+    coming = travel.upcoming_holidays(_date(2026, 11, 13), "ar")
+    assert coming[0] == {"date": "2027-01-07", "name": "عيد الميلاد المجيد (القبطي)", "days_left": 55}
+    assert len(coming) == 7 and all(h["days_left"] >= 0 for h in coming)
+    assert travel.upcoming_holidays(_date(2026, 10, 6), "en")[0]["days_left"] == 0
+    monkeypatch.setattr(travel.requests, "get", lambda *a, **k: _Resp({"data": {"timings": {
+        "Fajr": "05:01 (EET)", "Sunrise": "06:28", "Dhuhr": "11:39", "Asr": "14:38",
+        "Maghrib": "16:59", "Isha": "18:19", "Midnight": "23:39"}}}))
+    times = travel.prayer_times(30.04, 31.23)["times"]
+    assert times["Fajr"] == "05:01" and list(times) == [k for k, _ in travel.PRAYERS]
+    monkeypatch.setattr(travel.requests, "get", lambda *a, **k: _Resp({"code": 400}))
+    assert "error" in travel.prayer_times(30.04, 31.23)
+
+
+def test_profile_remembers_name_and_children():
+    p = {}
+    assert profile.update(p, "اهلا انا اسمي احمد") == {"name": "احمد"}
+    assert profile.update(p, "My name is Sara") == {"name": "Sara"} and p["name"] == "Sara"
+    assert profile.update(p, "انا مسافر مع أطفال") == {"kids": True}
+    assert profile.update(p, "معايا اطفال برضه") == {} and profile.update(p, "اسمي ايه؟") == {}
+    assert profile.update({}, "احكيلي عن قلعة قايتباي") == {}
+    assert "Sara" in profile.describe(p) and "children" in profile.describe(p) and profile.describe({}) == ""
+
+
+def test_agent_passes_traveller_details_to_the_model(dbp):
+    agent, client = make_agent(dbp, [{"role": "assistant", "content": "ok"}])
+    agent.reply([], "hello", "The traveller's name is Sara.")
+    assert "TRAVELLER" in client.chat_calls[0]["messages"][0]["content"]
+    agent2, client2 = make_agent(dbp, [{"role": "assistant", "content": "ok"}])
+    agent2.reply([], "hello")
+    assert "TRAVELLER" not in client2.chat_calls[0]["messages"][0]["content"]
+
+
+def test_simple_answers_what_is_near(simple):
+    r = simple.reply([], "فيه إيه قريب من قلعة قايتباي؟")
+    assert "قريب من قلعة قايتباي" in r.text and "مسجد المرسي أبو العباس" in r.text and "كم" in r.text
+    en = simple.reply([], "What is near Karnak Temple Complex?")
+    assert "Near Karnak Temple Complex" in en.text and "Luxor Temple" in en.text and "km" in en.text
+
+
+def test_accuracy_check_runs_offline_and_reports(monkeypatch):
+    def no_network(*a, **k):
+        raise AssertionError("the accuracy check must not use the network")
+    monkeypatch.setattr(tools.requests, "get", no_network)
+    kb, f = KnowledgeBase(config.KNOWLEDGE_PATH), faq_module.FAQ(config.FAQ_PATH)
+    report = evaluate.run(kb, f, config.EVAL_PATH)
+    assert report["total"] >= 30 and report["passed"] + len(report["failures"]) == report["total"]
+    assert set(report["by_type"]) == {"topic", "faq", "tool"}
+    assert report["accuracy"] == round(100 * report["passed"] / report["total"], 1)
+    assert report["accuracy"] >= 90, report["failures"]
+
+
+def test_accuracy_check_can_fail(tmp_path):
+    cases = tmp_path / "cases.json"
+    cases.write_text(json.dumps([
+        {"q": "احكيلي عن قلعة قايتباي", "type": "topic", "expect": "karnak"},
+        {"q": "رقم شرطة السياحة كام؟", "type": "faq", "expect": "999"},
+        {"q": "الجو عامل إيه في أسوان؟", "type": "tool", "expect": "search_hotels"},
+        {"q": "احكيلي عن قلعة قايتباي", "type": "topic", "expect": "qaitbay"}], ensure_ascii=False),
+        encoding="utf-8")
+    report = evaluate.run(KnowledgeBase(config.KNOWLEDGE_PATH), faq_module.FAQ(config.FAQ_PATH), cases)
+    assert (report["passed"], report["total"], report["accuracy"]) == (1, 4, 25.0)
+    assert [r["got"] for r in report["failures"]] == ["qaitbay", report["failures"][1]["got"], "get_weather"]
+
+
+def test_faq_matches_questions_made_of_common_words():
+    f = faq_module.FAQ(config.FAQ_PATH)
+    assert "ديمو" in f.match("What can you do?") and "ديمو" in f.match("what can you do")
+    assert f.match("what") is None and f.match("can you do it") is None
+
+
+def test_survey(dbp):
+    assert db.survey_summary(dbp) == {"responses": 0, "comments": [], "ease": None, "useful": None, "design": None}
+    db.log_survey(dbp, 5, 4, 3, "حلو")
+    db.log_survey(dbp, 9, 0, 3)
+    s = db.survey_summary(dbp)
+    assert (s["responses"], s["ease"], s["useful"], s["design"], s["comments"]) == (2, 5.0, 2.5, 3.0, ["حلو"])
+
+
+def test_channel_and_telegram(dbp, monkeypatch):
+    import telegram_bot
+    f, kb = faq_module.FAQ(config.FAQ_PATH), KnowledgeBase(config.KNOWLEDGE_PATH)
+    simple_agent = SimpleAgent(kb, dbp)
+    assert "126" in channel.plain_answer("رقم شرطة السياحة كام؟", [], f, simple_agent)
+    assert "فاروس" in channel.plain_answer("احكيلي عن قلعة قايتباي", [], f, simple_agent)
+
+    class Broken:
+        def reply(self, history, question):
+            raise OllamaError("down")
+    assert "فاروس" in channel.plain_answer("احكيلي عن قلعة قايتباي", [], f, simple_agent, Broken())
+    assert channel.to_plain_text("**اسم** و [رابط](https://x.y)") == "اسم و رابط: https://x.y"
+
+    bot = {"faq": f, "simple": simple_agent, "model": None, "history": {}}
+    assert telegram_bot.handle_update({"message": {"chat": {"id": 7}, "text": "/start"}}, bot) == (7, telegram_bot.WELCOME)
+    chat_id, text = telegram_bot.handle_update(
+        {"message": {"chat": {"id": 7}, "text": "عايز فندق في الأقصر بأقل من 2000 جنيه"}}, bot)
+    assert chat_id == 7 and "1,300" in text and "**" not in text and len(bot["history"][7]) == 2
+    assert telegram_bot.handle_update({"message": {"chat": {"id": 7}}}, bot) is None
+    assert telegram_bot.handle_update({"edited_message": {}}, bot) is None
+    monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
+    assert telegram_bot.main() == 1
+
+
+def test_cloud_image_question(monkeypatch):
+    from bot import cloud_llm
+    sent = {}
+
+    def fake_post(url, json=None, headers=None, timeout=None, files=None, data=None):
+        sent.update(json)
+        return _Post(200, {"choices": [{"message": {"content": " ده معبد الكرنك. "}}]})
+    monkeypatch.setattr(cloud_llm.requests, "post", fake_post)
+    out = CloudClient("k").describe_image(b"\x89PNG", "image/png", "What is this?", "vision-model")
+    assert out == "ده معبد الكرنك." and sent["model"] == "vision-model"
+    parts = sent["messages"][0]["content"]
+    assert parts[0] == {"type": "text", "text": "What is this?"}
+    assert parts[1]["image_url"]["url"].startswith("data:image/png;base64,")

@@ -23,6 +23,9 @@ CREATE TABLE IF NOT EXISTS questions (
     id INTEGER PRIMARY KEY AUTOINCREMENT, text TEXT, source TEXT, created_at TEXT);
 CREATE TABLE IF NOT EXISTS feedback (
     id INTEGER PRIMARY KEY AUTOINCREMENT, question TEXT, rating INTEGER, created_at TEXT);
+CREATE TABLE IF NOT EXISTS survey (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, ease INTEGER, useful INTEGER, design INTEGER,
+    comment TEXT, created_at TEXT);
 """
 
 HOTELS = [
@@ -146,3 +149,22 @@ def stats(db_path) -> dict:
             db_path, "SELECT question AS text, COUNT(*) AS n FROM feedback WHERE rating = 0 "
                      "GROUP BY question ORDER BY n DESC LIMIT 10"),
     }
+
+
+# ---- satisfaction survey -------------------------------------------------------
+def log_survey(db_path, ease: int, useful: int, design: int, comment: str = "") -> None:
+    """Each score is 1 (poor) to 5 (excellent)."""
+    from datetime import datetime
+    clamp = lambda v: max(1, min(5, int(v)))  # noqa: E731
+    execute(db_path, "INSERT INTO survey (ease, useful, design, comment, created_at) VALUES (?,?,?,?,?)",
+            (clamp(ease), clamp(useful), clamp(design), str(comment)[:500],
+             datetime.now().isoformat(timespec="seconds")))
+
+
+def survey_summary(db_path) -> dict:
+    row = query(db_path, "SELECT COUNT(*) AS n, AVG(ease) AS ease, AVG(useful) AS useful, "
+                         "AVG(design) AS design FROM survey")[0]
+    comments = [r["comment"] for r in query(
+        db_path, "SELECT comment FROM survey WHERE comment != '' ORDER BY id DESC LIMIT 20")]
+    return {"responses": row["n"], "comments": comments,
+            **{k: round(row[k], 1) if row[k] is not None else None for k in ("ease", "useful", "design")}}

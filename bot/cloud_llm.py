@@ -4,6 +4,7 @@ Used only when an API key is configured; the hosted site cannot run a local
 model, so this is what gives it free conversation there. The client exposes the
 same chat() interface as OllamaClient, so the agent does not care which one it has.
 """
+import base64
 import json
 
 import requests
@@ -13,6 +14,7 @@ from .llm import OllamaError
 DEFAULT_BASE_URL = "https://api.groq.com/openai/v1"
 DEFAULT_MODEL = "llama-3.3-70b-versatile"
 DEFAULT_STT_MODEL = "whisper-large-v3"
+DEFAULT_VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
 
 
 class CloudError(OllamaError):
@@ -100,6 +102,21 @@ class CloudClient:
         if calls:
             out["tool_calls"] = calls
         return out
+
+    def describe_image(self, image: bytes, mime: str, question: str, model: str = DEFAULT_VISION_MODEL) -> str:
+        """Ask a vision model about a photo (meant for monuments and places)."""
+        uri = f"data:{mime};base64,{base64.b64encode(image).decode()}"
+        payload = {"model": model, "temperature": self.temperature, "messages": [{"role": "user", "content": [
+            {"type": "text", "text": question}, {"type": "image_url", "image_url": {"url": uri}}]}]}
+        try:
+            r = requests.post(f"{self.base_url}/chat/completions", json=payload,
+                              headers=self._headers(), timeout=self.timeout)
+        except requests.RequestException as e:
+            raise CloudError("Cloud model is not reachable") from e
+        try:
+            return str(self._check(r)["choices"][0]["message"].get("content") or "").strip()
+        except (KeyError, IndexError, TypeError) as e:
+            raise CloudError("Cloud model returned an unexpected response") from e
 
     def transcribe(self, audio: bytes, filename: str = "voice.wav") -> str:
         """Speech to text for voice messages."""

@@ -11,6 +11,7 @@ from .agent import AgentResult
 from .cities import CITIES, canonical_city
 from .textutil import normalize
 from .tools import dispatch
+from .travel import nearest
 
 _WORD = re.compile(r"[^\W_]+")
 LOCAL_MATCH = 0.45  # below this, the local topic is a weak match: ask the web sources
@@ -27,6 +28,7 @@ HOTEL = ("فندق", "فنادق", "اوتيل", "منتجع", "hotel", "resort"
 TOUR = ("جوله", "جولات", "رحله", "رحلات", "tour", "excursion", "activities")
 PLAN = ("برنامج", "itinerary", "plan", "خطه")
 BOOK = ("احجز", "حجز", "book", "reserve")
+NEAR = ("قريب من", "قريبه من", "جنب", "بالقرب من", "حوالين", "near", "close to", "around")
 CHEAPER = ("اقل", "تحت", "ارخص", "under", "below", "less", "max", "budget", "اقصي")
 
 
@@ -57,13 +59,14 @@ def format_booking(b: dict, en: bool = False) -> str:
 
 
 class SimpleAgent:
-    def __init__(self, kb, db_path):
+    def __init__(self, kb, db_path, dispatcher=dispatch):
         self.kb = kb
         self.db_path = db_path
+        self.dispatch = dispatcher  # replaced in the accuracy check to stay offline
 
     # ---- helpers ------------------------------------------------------
     def _tool(self, result: AgentResult, name: str, **args) -> dict:
-        out = dispatch(name, args, self.db_path)
+        out = self.dispatch(name, args, self.db_path)
         result.tool_events.append({"tool": name, "args": args, "result": out})
         return out
 
@@ -87,7 +90,7 @@ class SimpleAgent:
         return max(numbers) if numbers else None
 
     # ---- main ---------------------------------------------------------
-    def reply(self, history: list[dict], user_text: str) -> AgentResult:
+    def reply(self, history: list[dict], user_text: str, about_user: str = "") -> AgentResult:
         result = AgentResult(text="", search_mode=self.kb.mode)
         en = is_english(user_text)
         n = normalize(user_text)
@@ -177,6 +180,18 @@ class SimpleAgent:
                     for t in out["tours"]]
             result.text = "\n".join([head, ""] + rows) + hint
             return result
+
+        if has(NEAR):  # "what is near Karnak?": the closest known places
+            found = self.kb.search(user_text, k=1, prefer_city=canonical_city(user_text))
+            place = found[0]["doc"] if found else None
+            if place and "lat" in place and self.kb.match_strength(user_text, place) >= 0.3:
+                close = nearest(self.kb.docs, place["lat"], place["lon"], 4, exclude_id=place["id"])
+                head = (f"**Near {place['title_en']}:**" if en else f"**قريب من {place['title_ar']}:**")
+                rows = [f"- {c['doc']['title_en'] if en else c['doc']['title_ar']} "
+                        f"({c['km']:g} {'km' if en else 'كم'})" for c in close]
+                result.sources = [place["title_ar"]]
+                result.text = "\n".join([head, ""] + rows)
+                return result
 
         if has(BOOK):
             result.text = ("Tell me what you need, for example: hotels in Luxor, or tours in Aswan."

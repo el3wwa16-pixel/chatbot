@@ -7,6 +7,7 @@ BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 KNOWLEDGE_PATH = DATA_DIR / "knowledge.json"
 FAQ_PATH = DATA_DIR / "faq.txt"
+EVAL_PATH = DATA_DIR / "eval.json"
 # Files the app writes. On a host where the project folder is read-only, use the temp folder.
 _WRITABLE_DIR = DATA_DIR if os.access(DATA_DIR, os.W_OK) else Path(tempfile.gettempdir())
 DB_PATH = Path(os.getenv("TOURBOT_DB", str(_WRITABLE_DIR / "tourism.db")))
