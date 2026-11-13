@@ -38,8 +38,15 @@ EXAMPLES = [
 ]
 
 
+def code_version() -> float:
+    """Changes whenever the bot's code or knowledge base changes, so the cached
+    bot below is rebuilt after an update instead of serving the old version."""
+    files = list((config.BASE_DIR / "bot").glob("*.py")) + [config.KNOWLEDGE_PATH]
+    return max(f.stat().st_mtime for f in files)
+
+
 @st.cache_resource
-def load_bot():
+def load_bot(version: float):
     client = OllamaClient(config.OLLAMA_HOST, config.CHAT_MODEL, config.EMBED_MODEL,
                           num_ctx=config.NUM_CTX, temperature=config.TEMPERATURE)
     db.init_db(config.DB_PATH)
@@ -47,7 +54,7 @@ def load_bot():
     return client, kb, TourismAgent(client, kb, config.DB_PATH), SimpleAgent(kb, config.DB_PATH)
 
 
-client, kb, ai_agent, simple_agent = load_bot()
+client, kb, ai_agent, simple_agent = load_bot(code_version())
 ai_ready = client.is_up() and client.has_model(config.CHAT_MODEL)
 
 if "messages" not in st.session_state:
