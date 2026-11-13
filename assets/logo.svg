@@ -1,6 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Demo">
-  <path d="M152 40h208a96 96 0 0 1 96 96v180a96 96 0 0 1-48 83l22 81-112-68H152a96 96 0 0 1-96-96V136a96 96 0 0 1 96-96z" fill="#E9C46A"/>
-  <path d="M311 173l-29 55 29 55-55-29-55 29 29-55-29-55 55 29z" fill="#B8923C"/>
-  <path d="M256 100l24 104 96 24-96 24-24 104-24-104-96-24 96-24z" fill="#131A3A"/>
-  <circle cx="256" cy="228" r="15" fill="#F2EBDD"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Eye of Horus">
+  <circle cx="256" cy="256" r="256" fill="#1A2639"/>
+  <g fill="none" stroke="#D4AF37" stroke-width="20" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M92 176 Q250 104 428 186"/>
+    <path d="M104 250 Q250 168 398 244 Q250 318 104 250 Z"/>
+    <path d="M398 244 L452 252"/>
+    <path d="M232 306 L218 404"/>
+    <path d="M272 300 Q318 398 384 388 Q428 378 412 344 Q396 322 376 342"/>
+  </g>
+  <circle cx="252" cy="244" r="36" fill="#D4AF37"/>
 </svg>

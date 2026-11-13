@@ -127,8 +127,8 @@ with st.sidebar:
         st.rerun()
 
 # ---- chat ----------------------------------------------------------------
-st.markdown(brand.hero_html(config.BOT_NAME, "رفيق رحلتك في مصر: أماكن، برامج، طقس، وحجز"),
-            unsafe_allow_html=True)
+st.markdown(brand.hero_html(config.BOT_NAME, "رفيق رحلتك في مصر: أماكن، برامج، طقس، وحجز",
+                            latin="DEMO AI"), unsafe_allow_html=True)
 
 
 def show_details(message: dict) -> None:
@@ -153,7 +153,7 @@ for message in st.session_state.messages:
 
 # Starter questions under the welcome message (the sidebar is hidden on phones).
 if len(st.session_state.messages) == 1:
-    st.markdown('<div class="demo-hint">جرّب واحد من دول:</div>', unsafe_allow_html=True)
+    st.markdown('<div class="nb-hint">جرّب واحد من دول:</div>', unsafe_allow_html=True)
     columns = st.columns(2)
     for i, example in enumerate(EXAMPLES[:4]):
         if columns[i % 2].button(example, key=f"start_{i}", use_container_width=True):
