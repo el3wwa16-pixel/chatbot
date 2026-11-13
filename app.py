@@ -54,18 +54,18 @@ if "messages" not in st.session_state:
 
 # ---- sidebar -------------------------------------------------------------
 with st.sidebar:
-    st.header("حالة النظام")
-    if ai_ready:
-        st.success(f"وضع الذكاء الاصطناعي: {config.CHAT_MODEL}")
-        if client.has_model(config.EMBED_MODEL):
-            st.caption(f"البحث الدلالي: {config.EMBED_MODEL}")
+    with st.expander("حالة النظام"):
+        if ai_ready:
+            st.success(f"وضع الذكاء الاصطناعي: {config.CHAT_MODEL}")
+            if client.has_model(config.EMBED_MODEL):
+                st.caption(f"البحث الدلالي: {config.EMBED_MODEL}")
+            else:
+                st.caption(f"البحث بالكلمات (لبحث أدق: ollama pull {config.EMBED_MODEL})")
         else:
-            st.caption(f"البحث بالكلمات (لبحث أدق: ollama pull {config.EMBED_MODEL})")
-    else:
-        st.warning("الوضع البسيط: البوت شغال بدون موديل (بحث + أدوات فقط).")
-        st.caption("لتشغيل الذكاء الاصطناعي: افتح Ollama ثم نفّذ")
-        st.code(f"ollama pull {config.CHAT_MODEL}")
-    st.caption(f"قاعدة المعرفة: {len(kb.docs)} موضوع")
+            st.info("الوضع البسيط: البوت شغال بدون موديل (بحث + أدوات).")
+            st.caption("وضع الذكاء الاصطناعي يعمل على جهازك: افتح Ollama ثم نفّذ")
+            st.code(f"ollama pull {config.CHAT_MODEL}")
+        st.caption(f"قاعدة المعرفة: {len(kb.docs)} موضوع")
     with st.expander("ليه اسمه ديمو؟"):
         st.markdown("اختصار **ديمتريوس الفاليري** (Demetrius of Phalerum)، الخطيب والفيلسوف "
                     "اليوناني الذي تُنسب إليه فكرة مكتبة الإسكندرية القديمة.")

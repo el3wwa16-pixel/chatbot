@@ -61,7 +61,8 @@ h2, h3 {{ color: {GOLD}; font-family: 'Cairo', sans-serif; }}
 /* the bot's bubble (right side, avatar on the right) */
 [data-testid="stChatMessage"] {{
     flex-direction: row-reverse; background: {CARD}; border: 1px solid {LINE};
-    border-radius: 22px 22px 6px 22px; padding: 14px 16px; margin-left: 8%;
+    border-radius: 22px 22px 6px 22px; padding: 14px 16px;
+    width: 92%; margin-left: 8%; box-sizing: border-box;
 }}
 [data-testid="stChatMessage"] p, [data-testid="stChatMessage"] li {{ line-height: 1.85; font-size: 17px; }}
 [data-testid="stChatMessage"] a, [data-testid="stChatMessage"] strong {{ color: {GOLD}; }}
