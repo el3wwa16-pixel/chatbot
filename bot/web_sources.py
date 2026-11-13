@@ -9,7 +9,7 @@ import requests
 
 from .textutil import normalize
 
-HEADERS = {"User-Agent": "rafiq-tourism-chatbot/1.0 (student project)"}
+HEADERS = {"User-Agent": "demo-tourism-chatbot/1.0 (student project)"}
 
 SOURCES = {
     "ar": [("ar.wikipedia.org", "ويكيبيديا العربية"), ("en.wikipedia.org", "Wikipedia")],

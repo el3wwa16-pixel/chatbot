@@ -16,8 +16,6 @@ st.set_page_config(page_title=f"{config.BOT_NAME} | مساعد السياحة ف
 
 st.markdown(brand.css(), unsafe_allow_html=True)
 
-AVATARS = {"assistant": brand.ICON, "user": brand.USER_ICON}
-
 WELCOME = (f"أهلًا بيك! أنا **{config.BOT_NAME}**، رفيق رحلتك في مصر.\n\n"
            "اسألني عن أي مكان، اطلب برنامج رحلة، اعرف الجو، أو احجز فندق أو جولة.\n\n"
            "You can also write to me in English.")
@@ -68,6 +66,9 @@ with st.sidebar:
         st.caption("لتشغيل الذكاء الاصطناعي: افتح Ollama ثم نفّذ")
         st.code(f"ollama pull {config.CHAT_MODEL}")
     st.caption(f"قاعدة المعرفة: {len(kb.docs)} موضوع")
+    with st.expander("ليه اسمه ديمو؟"):
+        st.markdown("اختصار **ديمتريوس الفاليري** (Demetrius of Phalerum)، الخطيب والفيلسوف "
+                    "اليوناني الذي تُنسب إليه فكرة مكتبة الإسكندرية القديمة.")
     with st.expander("مصادر البيانات"):
         st.markdown(
             f"- قاعدة المعرفة المحلية ({len(kb.docs)} موضوعًا)\n"
@@ -143,13 +144,16 @@ def show_details(message: dict) -> None:
 
 
 for message in st.session_state.messages:
-    with st.chat_message(message["role"], avatar=AVATARS.get(message["role"])):
+    if message["role"] == "user":
+        st.markdown(brand.user_bubble(message["content"]), unsafe_allow_html=True)
+        continue
+    with st.chat_message("assistant", avatar=brand.ICON):
         st.markdown(message["content"])
         show_details(message)
 
 # Starter questions under the welcome message (the sidebar is hidden on phones).
 if len(st.session_state.messages) == 1:
-    st.markdown('<div class="rafiq-hint">جرّب واحد من دول:</div>', unsafe_allow_html=True)
+    st.markdown('<div class="demo-hint">جرّب واحد من دول:</div>', unsafe_allow_html=True)
     columns = st.columns(2)
     for i, example in enumerate(EXAMPLES[:4]):
         if columns[i % 2].button(example, key=f"start_{i}", use_container_width=True):
@@ -160,8 +164,7 @@ prompt = st.chat_input("اكتب سؤالك هنا...") or st.session_state.pop(
 if prompt:
     history = list(st.session_state.messages[1:])  # skip the welcome message
     st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user", avatar=brand.USER_ICON):
-        st.markdown(prompt)
+    st.markdown(brand.user_bubble(prompt), unsafe_allow_html=True)
     with st.chat_message("assistant", avatar=brand.ICON):
         with st.spinner("بفكر..."):
             mode = f"وضع الذكاء الاصطناعي ({config.CHAT_MODEL})"

@@ -23,4 +23,4 @@ TOP_K = 4              # knowledge chunks given to the model per question
 MAX_TOOL_ROUNDS = 5    # safety limit on tool-calling loops
 HISTORY_MESSAGES = 12  # how many past messages the model sees
 
-BOT_NAME = "رفيق"
+BOT_NAME = "ديمو"  # short for Demetrius of Phalerum (ديمتريوس الفاليري)

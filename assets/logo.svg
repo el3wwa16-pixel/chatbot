@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Rafiq">
-  <path d="M152 40h208a96 96 0 0 1 96 96v180a96 96 0 0 1-48 83l22 81-112-68H152a96 96 0 0 1-96-96V136a96 96 0 0 1 96-96z" fill="#1B2B6B"/>
-  <path d="M311 173l-29 55 29 55-55-29-55 29 29-55-29-55 55 29z" fill="#3CC4BC"/>
-  <path d="M256 100l24 104 96 24-96 24-24 104-24-104-96-24 96-24z" fill="#D9A441"/>
-  <circle cx="256" cy="228" r="15" fill="#F7F2E8"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Demo">
+  <path d="M152 40h208a96 96 0 0 1 96 96v180a96 96 0 0 1-48 83l22 81-112-68H152a96 96 0 0 1-96-96V136a96 96 0 0 1 96-96z" fill="#E9C46A"/>
+  <path d="M311 173l-29 55 29 55-55-29-55 29 29-55-29-55 55 29z" fill="#B8923C"/>
+  <path d="M256 100l24 104 96 24-96 24-24 104-24-104-96-24 96-24z" fill="#131A3A"/>
+  <circle cx="256" cy="228" r="15" fill="#F2EBDD"/>
 </svg>

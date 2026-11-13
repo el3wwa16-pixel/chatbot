@@ -30,7 +30,7 @@ def _int(value, default=None):
 
 
 # ---- weather (free, no key: Open-Meteo first, wttr.in as backup) ---------
-_HEADERS = {"User-Agent": "rafiq-tourism-chatbot (student project)"}
+_HEADERS = {"User-Agent": "demo-tourism-chatbot (student project)"}
 
 
 def _open_meteo(lat: float, lon: float) -> dict:
