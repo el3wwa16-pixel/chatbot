@@ -51,8 +51,9 @@ html, body, [data-testid="stAppViewContainer"], [data-testid="stSidebar"],
 .rafiq-hero {{ direction: rtl; display: flex; align-items: center; gap: 18px; margin: 4px 0 10px; }}
 .rafiq-hero img {{ width: 84px; height: 84px; flex: none; }}
 .rafiq-name {{ font-family: 'Aref Ruqaa', serif; font-weight: 700; font-size: 68px;
-               line-height: 1.15; color: {LAPIS}; }}
-.rafiq-tag {{ font-size: 17px; color: {TURQUOISE}; font-weight: 500; margin-top: 2px; }}
+               line-height: 1.15; color: {LAPIS}; text-align: right; }}
+.rafiq-tag {{ font-size: 17px; color: {TURQUOISE}; font-weight: 500; margin-top: 2px;
+              text-align: right; }}
 .rafiq-wave {{ height: 12px; background: url("{_WAVE}") repeat-x center; margin: 4px 0 22px; }}
 
 /* headings */
