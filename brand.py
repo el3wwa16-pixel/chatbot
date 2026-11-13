@@ -75,14 +75,15 @@ html, body, [data-testid="stAppViewContainer"], [data-testid="stSidebar"],
 [data-testid="stMarkdownContainer"] table {{ width: 100%; direction: rtl; }}
 [data-testid="stMarkdownContainer"] th {{ background: {NIGHT}; color: {GOLD}; }}
 [data-testid="stMarkdownContainer"] td {{ background: rgba(255, 255, 255, .6); }}
-[data-testid="stMain"] [role="radiogroup"] {{ gap: 8px; flex-wrap: wrap; direction: rtl; margin-bottom: 8px; }}
-[data-testid="stMain"] [role="radiogroup"] label {{
+div[role="radiogroup"] {{ gap: 8px; flex-wrap: wrap; direction: rtl; margin-bottom: 8px; }}
+div[role="radiogroup"] label {{
     border: 1.5px solid {GOLD}; border-radius: 999px; padding: 5px 14px;
     background: rgba(255, 255, 255, .55); box-shadow: {SHADOW}; cursor: pointer;
 }}
-[data-testid="stMain"] [role="radiogroup"] label:has(input:checked) {{ background: {NIGHT}; }}
-[data-testid="stMain"] [role="radiogroup"] label:has(input:checked) p {{ color: {GOLD}; font-weight: 700; }}
-[data-testid="stMain"] [role="radiogroup"] label > div:first-child {{ display: none; }}
+div[role="radiogroup"] label:has(input:checked) {{ background: {NIGHT}; }}
+div[role="radiogroup"] label:has(input:checked) p {{ color: {GOLD}; font-weight: 700; }}
+div[role="radiogroup"] label > div:first-child {{ display: none; }}
+div[role="radiogroup"] label p {{ color: {NIGHT}; font-size: 15px; }}
 [data-testid="stMetricValue"] {{ color: {NIGHT}; }}
 .nb-day {{ direction: rtl; background: {BOT}; border-radius: {RADIUS}; padding: 14px 18px;
            margin: 0 0 12px; box-shadow: {SHADOW}; animation: nb-in .45s ease both; }}
