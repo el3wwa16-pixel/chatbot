@@ -3,6 +3,7 @@ from datetime import date
 
 import streamlit as st
 
+import brand
 import config
 from bot import db, tools
 from bot.agent import TourismAgent
@@ -11,20 +12,13 @@ from bot.rag import KnowledgeBase
 from bot.simple import SimpleAgent, format_booking
 
 st.set_page_config(page_title=f"{config.BOT_NAME} | مساعد السياحة في مصر",
-                   page_icon="🧭", layout="centered")
+                   page_icon=brand.ICON, layout="centered")
 
-# Each paragraph picks its own direction: Arabic right-to-left, English left-to-right.
-st.markdown("""
-<style>
-[data-testid="stChatMessage"] p, [data-testid="stChatMessage"] li,
-[data-testid="stSidebar"] p, h1, h2, h3, [data-testid="stCaptionContainer"] {
-    unicode-bidi: plaintext; text-align: start;
-}
-[data-testid="stChatInput"] textarea { unicode-bidi: plaintext; }
-</style>
-""", unsafe_allow_html=True)
+st.markdown(brand.css(), unsafe_allow_html=True)
 
-WELCOME = (f"أهلًا بيك! أنا **{config.BOT_NAME}**، مساعدك السياحي في مصر. 🧭\n\n"
+AVATARS = {"assistant": brand.ICON, "user": brand.USER_ICON}
+
+WELCOME = (f"أهلًا بيك! أنا **{config.BOT_NAME}**، رفيق رحلتك في مصر.\n\n"
            "اسألني عن أي مكان، اطلب برنامج رحلة، اعرف الجو، أو احجز فندق أو جولة.\n\n"
            "You can also write to me in English.")
 
@@ -132,8 +126,8 @@ with st.sidebar:
         st.rerun()
 
 # ---- chat ----------------------------------------------------------------
-st.title(f"🧭 {config.BOT_NAME}")
-st.caption("مساعدك السياحي في مصر: أماكن، برامج رحلات، طقس، وحجز")
+st.markdown(brand.hero_html(config.BOT_NAME, "رفيق رحلتك في مصر: أماكن، برامج، طقس، وحجز"),
+            unsafe_allow_html=True)
 
 
 def show_details(message: dict) -> None:
@@ -149,18 +143,26 @@ def show_details(message: dict) -> None:
 
 
 for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
+    with st.chat_message(message["role"], avatar=AVATARS.get(message["role"])):
         st.markdown(message["content"])
         show_details(message)
+
+# Starter questions under the welcome message (the sidebar is hidden on phones).
+if len(st.session_state.messages) == 1:
+    st.markdown('<div class="rafiq-hint">جرّب واحد من دول:</div>', unsafe_allow_html=True)
+    columns = st.columns(2)
+    for i, example in enumerate(EXAMPLES[:4]):
+        if columns[i % 2].button(example, key=f"start_{i}", use_container_width=True):
+            st.session_state.pending = example
 
 prompt = st.chat_input("اكتب سؤالك هنا...") or st.session_state.pop("pending", None)
 
 if prompt:
     history = list(st.session_state.messages[1:])  # skip the welcome message
     st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
+    with st.chat_message("user", avatar=brand.USER_ICON):
         st.markdown(prompt)
-    with st.chat_message("assistant"):
+    with st.chat_message("assistant", avatar=brand.ICON):
         with st.spinner("بفكر..."):
             mode = f"وضع الذكاء الاصطناعي ({config.CHAT_MODEL})"
             try:

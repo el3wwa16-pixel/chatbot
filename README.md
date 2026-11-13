@@ -137,6 +137,7 @@ streamlit run app.py
 | `tests/test_core.py` | 65 اختبارًا آليًا (`pip install -r requirements-dev.txt` ثم `pytest -q`) |
 | `run.bat`, `run.sh` | تشغيل بضغطة واحدة |
 | `check_setup.py` | فحص الجاهزية |
+| `brand.py`, `assets/`, `BRAND.md` | الهوية البصرية: الألوان والخطوط والشعار ودليل استخدامها |
 
 ## سيناريو عرض جاهز للمناقشة
 
