@@ -12,6 +12,7 @@ import requests
 
 from . import db
 from .cities import CITIES, canonical_city
+from .web_sources import search_web_knowledge
 
 WEATHER_CODES = {
     0: "سماء صافية", 1: "صافٍ غالبًا", 2: "غائم جزئيًا", 3: "غائم",
@@ -225,6 +226,11 @@ TOOL_SPECS = [
           {"ref": {"type": "string"}}, ["ref"]),
     _spec("cancel_booking", "Cancel a booking by its reference.",
           {"ref": {"type": "string"}}, ["ref"]),
+    _spec("search_web_knowledge",
+          "Look a topic up in Wikipedia / Wikivoyage. Use it when the KNOWLEDGE section "
+          "does not contain the answer. Always mention the source in your reply.",
+          {"query": {"type": "string", "description": "Short topic, e.g. 'معبد دندرة'"},
+           "lang": {"type": "string", "enum": ["ar", "en"]}}, ["query"]),
     _spec("handoff_to_human",
           "Open a ticket for a human agent: complaints, refunds, emergencies, "
           "or anything you cannot solve.",
@@ -243,6 +249,8 @@ def dispatch(name: str, args: dict, db_path) -> dict:
     try:
         if name == "get_weather":
             return get_weather(**args)
+        if name == "search_web_knowledge":
+            return search_web_knowledge(**args)
         if name in _NEEDS_DB:
             return _NEEDS_DB[name](db_path, **args)
     except TypeError as e:

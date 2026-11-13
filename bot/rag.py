@@ -130,6 +130,18 @@ class KnowledgeBase:
             hits.sort(key=lambda h: -h["score"])
         return hits[:k]
 
+    def match_strength(self, query: str, doc: dict) -> float:
+        """0..1: share of the question's meaningful words found in the topic,
+        weighted so rare words (names of places) count more than common ones."""
+        words = set(tokenize(query))
+        if not words:
+            return 0.0
+        doc_words = set(tokenize(self._doc_text(doc)))
+        unknown = math.log(1 + (len(self.docs) + 0.5) / 0.5)
+        weight = lambda w: self._bm25.idf.get(w, unknown)  # noqa: E731
+        total = sum(weight(w) for w in words)
+        return sum(weight(w) for w in words if w in doc_words) / total if total else 0.0
+
     def _ranked(self, query: str, k: int) -> list[dict]:
         if self.ensure_embeddings():
             try:

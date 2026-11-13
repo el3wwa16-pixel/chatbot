@@ -13,6 +13,7 @@ from .textutil import normalize
 from .tools import dispatch
 
 _WORD = re.compile(r"[^\W_]+")
+LOCAL_MATCH = 0.45  # below this, the local topic is a weak match: ask the web sources
 _REF = re.compile(r"TB-[A-Z0-9]{6}")
 _DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
 
@@ -193,6 +194,16 @@ class SimpleAgent:
             return result
 
         hits = self.kb.search(user_text, k=3, prefer_city=canonical_city(user_text))
+        strong = bool(hits) and self.kb.match_strength(user_text, hits[0]["doc"]) >= LOCAL_MATCH
+        if not strong:
+            web = self._tool(result, "search_web_knowledge", query=user_text,
+                             lang="en" if en else "ar")
+            if "error" not in web:
+                result.sources = [f"{web['source']}: {web['title']}"]
+                label = "Source" if en else "المصدر"
+                result.text = (f"**{web['title']}**\n\n{web['extract']}\n\n"
+                               f"{label}: [{web['source']}]({web['url']})")
+                return result
         result.sources = [h["doc"].get("title_ar", "") for h in hits]
         if not hits:
             result.text = (

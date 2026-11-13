@@ -67,6 +67,11 @@ with st.sidebar:
         st.caption("لتشغيل الذكاء الاصطناعي: افتح Ollama ثم نفّذ")
         st.code(f"ollama pull {config.CHAT_MODEL}")
     st.caption(f"قاعدة المعرفة: {len(kb.docs)} موضوع")
+    with st.expander("مصادر البيانات"):
+        st.markdown(
+            f"- قاعدة المعرفة المحلية ({len(kb.docs)} موضوعًا)\n"
+            "- ويكيبيديا العربية\n- Wikipedia الإنجليزية\n- Wikivoyage (دليل سفر)\n"
+            "- Open-Meteo و wttr.in (الطقس)\n- قاعدة بيانات الحجوزات (SQLite)")
 
     st.header("جرّب")
     for example in EXAMPLES:

@@ -367,3 +367,87 @@ def test_weather_falls_back_to_second_provider(monkeypatch):
     assert out["source"] == "wttr.in" and out["now"]["temperature_c"] == 29.0
     assert out["forecast"][0] == {"date": "2026-11-13", "max_c": 31.0, "min_c": 17.0,
                                   "rain_chance_percent": 5}
+
+
+# ---- external sources (network mocked) ---------------------------------------
+from bot import web_sources  # noqa: E402
+
+
+def _wiki(pages):
+    return _Resp({"query": {"pages": {str(i): p for i, p in enumerate(pages)}}})
+
+
+def test_clean_query():
+    assert web_sources.clean_query("احكيلي عن معبد دندرة") == "معبد دندرة"
+    assert web_sources.clean_query("مين هو نجيب محفوظ؟") == "نجيب محفوظ"
+    assert web_sources.clean_query("Tell me about the Eiffel Tower") == "Eiffel Tower"
+    assert web_sources.clean_query("ايه ده") == "ايه ده"
+
+
+def test_web_search_picks_first_real_page_and_falls_back(monkeypatch):
+    calls = []
+
+    def fake_get(url, params=None, timeout=None, headers=None):
+        calls.append(url)
+        if "ar.wikipedia" in url:
+            return _wiki([{"index": 1, "title": "توضيح", "extract": "x" * 80,
+                           "pageprops": {"disambiguation": ""}},
+                          {"index": 2, "title": "قصير", "extract": "قصير"}])
+        return _wiki([{"index": 2, "title": "Other", "extract": "o" * 80, "fullurl": "u2"},
+                      {"index": 1, "title": "Dendera", "extract": "d" * 80, "fullurl": "u1"}])
+    monkeypatch.setattr(web_sources.requests, "get", fake_get)
+    out = web_sources.search_web_knowledge("احكيلي عن معبد دندرة", lang="ar")
+    assert out["title"] == "Dendera" and out["source"] == "Wikipedia" and out["url"] == "u1"
+    assert out["query"] == "معبد دندرة" and len(calls) == 2
+
+
+def test_web_search_errors(monkeypatch):
+    def boom(*a, **k):
+        raise web_sources.requests.ConnectionError("offline")
+    monkeypatch.setattr(web_sources.requests, "get", boom)
+    assert "unavailable" in web_sources.search_web_knowledge("Luxor", lang="en")["error"]
+    monkeypatch.setattr(web_sources.requests, "get", lambda *a, **k: _Resp({"batchcomplete": ""}))
+    assert "Nothing found" in web_sources.search_web_knowledge("zzzz", lang="en")["error"]
+    assert "error" in web_sources.search_web_knowledge("  ")
+
+
+def test_match_strength_separates_known_from_unknown():
+    kb = KnowledgeBase(config.KNOWLEDGE_PATH)
+    def strength(q):
+        hits = kb.search(q, k=1, prefer_city=canonical_city(q))
+        return kb.match_strength(q, hits[0]["doc"]) if hits else 0.0
+    for q in ["احكيلي عن قلعة قايتباي", "أروح فين في إسكندرية في يومين؟", "محتاج فيزا؟",
+              "ايه احسن وقت ازور مصر", "Tell me about Karnak temple", "اكل ايه في اسكندرية",
+              "Is Egypt safe? emergency numbers", "واحة سيوة"]:
+        assert strength(q) >= 0.45, q
+    for q in ["مين هو نجيب محفوظ", "احكيلي عن معبد دندرة", "ما هي عاصمة فرنسا",
+              "Who built the Eiffel Tower?", "تاريخ الدولة الفاطمية"]:
+        assert strength(q) < 0.45, q
+
+
+def test_simple_uses_web_for_unknown_topics_only(simple, monkeypatch):
+    asked = []
+
+    def fake_web(query, lang="ar"):
+        asked.append((query, lang))
+        return {"source": "ويكيبيديا العربية", "query": query, "title": "نجيب محفوظ",
+                "extract": "روائي مصري حائز على جائزة نوبل.", "url": "https://ar.wikipedia.org/x"}
+    monkeypatch.setattr(tools, "search_web_knowledge", fake_web)
+    r = simple.reply([], "مين هو نجيب محفوظ؟")
+    assert "نوبل" in r.text and "المصدر" in r.text and r.sources == ["ويكيبيديا العربية: نجيب محفوظ"]
+    assert asked == [("مين هو نجيب محفوظ؟", "ar")]
+    simple.reply([], "احكيلي عن قلعة قايتباي")
+    assert len(asked) == 1  # known topic: answered locally, no web call
+
+
+def test_simple_falls_back_to_local_when_web_fails(simple, monkeypatch):
+    monkeypatch.setattr(tools, "search_web_knowledge", lambda query, lang="ar": {"error": "x"})
+    assert "could not find" in simple.reply([], "xyzzy qwerty").text
+    assert "ملقتش" in simple.reply([], "زززز ششش").text
+    assert "معبد" in simple.reply([], "احكيلي عن معبد دندرة").text  # weak local topic still shown
+
+
+def test_dispatch_routes_web_tool(dbp, monkeypatch):
+    monkeypatch.setattr(tools, "search_web_knowledge", lambda query, lang="ar": {"title": query})
+    assert tools.dispatch("search_web_knowledge", {"query": "Luxor"}, dbp) == {"title": "Luxor"}
+    assert any(s["function"]["name"] == "search_web_knowledge" for s in tools.TOOL_SPECS)
