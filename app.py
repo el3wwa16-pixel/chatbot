@@ -2,16 +2,30 @@
 import json
 import os
 import re
+import sys
+import types
 from datetime import date
+from pathlib import Path
 from urllib.parse import quote
 
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 
-import brand
-import config
-from bot import db, evaluate, extras, planner, profile, tools, travel
+# The host keeps imported modules in memory between updates. When the project's files
+# change, drop this project's modules so the new code is imported together; otherwise an
+# updated app.py can meet an old copy of a module and fail to start.
+_ROOT = Path(__file__).resolve().parent
+_stamp = max(f.stat().st_mtime for f in [*_ROOT.glob("*.py"), *(_ROOT / "bot").glob("*.py")])
+_seen = sys.modules.setdefault("_demo_code_stamp", types.ModuleType("_demo_code_stamp"))
+if getattr(_seen, "value", None) != _stamp:
+    for _name in [m for m in sys.modules if m in ("brand", "config", "bot") or m.startswith("bot.")]:
+        del sys.modules[_name]
+    _seen.value = _stamp
+
+import brand  # noqa: E402
+import config  # noqa: E402
+from bot import db, evaluate, extras, planner, profile, tools, travel  # noqa: E402
 from bot.agent import TourismAgent
 from bot.cities import CITIES, canonical_city
 from bot.cloud_llm import DEFAULT_BASE_URL, DEFAULT_MODEL, DEFAULT_VISION_MODEL, CloudClient
@@ -54,9 +68,8 @@ def secret(name: str) -> str:
 def code_version() -> float:
     """Changes whenever the bot's code or data changes, so the cached bot below is
     rebuilt after an update instead of serving the old version."""
-    files = list((config.BASE_DIR / "bot").glob("*.py")) + [config.KNOWLEDGE_PATH, config.FAQ_PATH,
-                                                           config.EVAL_PATH]
-    return max(f.stat().st_mtime for f in files)
+    files = [config.KNOWLEDGE_PATH, config.FAQ_PATH, config.EVAL_PATH]
+    return max(_stamp, *(f.stat().st_mtime for f in files))
 
 
 @st.cache_resource
