@@ -4,6 +4,7 @@ Semantic search with local multilingual embeddings when Ollama's embedding
 model is available; automatic fallback to BM25 keyword search when it is not,
 so the bot never stops working.
 """
+import difflib
 import hashlib
 import json
 import math
@@ -54,6 +55,8 @@ class KnowledgeBase:
         self.docs: list[dict] = json.loads(raw.decode("utf-8"))
         self._hash = hashlib.sha1(raw).hexdigest()
         self._bm25 = _BM25([tokenize(self._doc_text(d)) for d in self.docs])
+        self._vocabulary = sorted(w for w in self._bm25.idf if len(w) >= 5)
+        self._titles = [set(tokenize(f"{d.get('title_ar', '')} {d.get('title_en', '')}")) for d in self.docs]
         self._emb: np.ndarray | None = None
         self._last_fail = 0.0
 
@@ -133,7 +136,7 @@ class KnowledgeBase:
     def match_strength(self, query: str, doc: dict) -> float:
         """0..1: share of the question's meaningful words found in the topic,
         weighted so rare words (names of places) count more than common ones."""
-        words = set(tokenize(query))
+        words = set(self.keywords(query))
         if not words:
             return 0.0
         doc_words = set(tokenize(self._doc_text(doc)))
@@ -141,6 +144,17 @@ class KnowledgeBase:
         weight = lambda w: self._bm25.idf.get(w, unknown)  # noqa: E731
         total = sum(weight(w) for w in words)
         return sum(weight(w) for w in words if w in doc_words) / total if total else 0.0
+
+    def keywords(self, query: str) -> list[str]:
+        """The question's meaningful words, with spelling mistakes corrected to the
+        closest word the knowledge base knows ('قيتباي' -> 'قايتباي')."""
+        out = []
+        for word in tokenize(query):
+            if word not in self._bm25.idf and len(word) >= 5:
+                close = difflib.get_close_matches(word, self._vocabulary, n=1, cutoff=0.84)
+                word = close[0] if close else word
+            out.append(word)
+        return out
 
     def _ranked(self, query: str, k: int) -> list[dict]:
         if self.ensure_embeddings():
@@ -151,6 +165,10 @@ class KnowledgeBase:
                 return [{"doc": self.docs[i], "score": float(sims[i])} for i in order]
             except (OllamaError, ValueError):
                 pass  # fall through to keyword search
-        scores = self._bm25.scores(tokenize(query))
+        words = self.keywords(query)
+        scores = self._bm25.scores(words)
+        for i, title in enumerate(self._titles):  # a topic named in the question comes first
+            if scores[i] > 0 and words:
+                scores[i] *= 1 + 0.6 * len(title & set(words)) / len(set(words))
         order = sorted(range(len(scores)), key=lambda i: -scores[i])[:k]
         return [{"doc": self.docs[i], "score": float(scores[i])} for i in order if scores[i] > 0]

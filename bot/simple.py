@@ -12,6 +12,7 @@ from .cities import CITIES, canonical_city
 from .textutil import normalize
 from .tools import dispatch
 from .travel import nearest
+from . import trip_request
 
 _WORD = re.compile(r"[^\W_]+")
 LOCAL_MATCH = 0.45  # below this, the local topic is a weak match: ask the web sources
@@ -122,6 +123,12 @@ class SimpleAgent:
                            "A human agent will follow up with you." if en else
                            f"فتحتلك تذكرة رقم #{out['ticket']} لفريق خدمة العملاء، "
                            "وموظف هيتواصل معاك. للطوارئ: شرطة السياحة 126.")
+            return result
+
+        request = trip_request.parse(user_text)  # a whole trip described in one sentence
+        if request and not (words & WEATHER):
+            result.text = trip_request.compose(self.kb.docs, self.db_path, request, en)
+            result.tool_events.append({"tool": "plan_trip", "args": request, "result": {"ok": True}})
             return result
 
         if words & WEATHER:

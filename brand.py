@@ -33,7 +33,8 @@ def _logo_uri() -> str:
     return f"data:image/svg+xml;base64,{data}"
 
 
-def css() -> str:
+def css(rtl: bool = True) -> str:
+    side = "rtl" if rtl else "ltr"
     return f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@600;800&family=Cinzel:wght@600;700&family=Inter:wght@400;500;600&family=Tajawal:wght@400;500;700&display=swap');
@@ -99,6 +100,9 @@ h2, h3 {{ color: {NIGHT}; font-family: 'Cairo', 'Cinzel', serif; }}
 
 @keyframes nb-in {{ from {{ opacity: 0; transform: translateY(10px); }}
                     to {{ opacity: 1; transform: translateY(0); }} }}
+
+/* lists follow the interface language, so bullets sit on the reading side */
+[data-testid="stMarkdownContainer"] ul, [data-testid="stMarkdownContainer"] ol {{ direction: {side}; }}
 
 /* bot bubble */
 [data-testid="stChatMessage"] {{
