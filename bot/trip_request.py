@@ -94,16 +94,16 @@ def compose(kb_docs: list[dict], db_path, request: dict, en: bool = False) -> st
         affordable = [h for h in hotels if budget is None or h["price_per_night_egp"] * nights * rooms <= 0.6 * budget]
         hotel = affordable[-1] if affordable else hotels[0]  # the best one that leaves room for the rest
         cost = hotel["price_per_night_egp"] * nights * rooms
-        lines += ["", (f"**Stay:** {hotel['name']}, {nights} nights × {rooms} rooms = {cost:,} EGP" if en else
-                       f"**الإقامة:** {hotel['name']}، {nights} ليالٍ × {rooms} غرف = {cost:,} جنيه")]
+        lines += ["", (f"- **Stay:** {hotel['name']}, {nights} nights × {rooms} rooms = {cost:,} EGP" if en else
+                       f"- **الإقامة:** {hotel['name']}، {nights} ليالٍ × {rooms} غرف = {cost:,} جنيه")]
         if budget is not None:
             left = budget - cost
             if left >= 0:
-                lines.append(f"**Left for tours, food and transport:** {left:,} EGP" if en else
-                             f"**الباقي للجولات والأكل والمواصلات:** {left:,} جنيه")
+                lines.append(f"- **Left for tours, food and transport:** {left:,} EGP" if en else
+                             f"- **الباقي للجولات والأكل والمواصلات:** {left:,} جنيه")
             else:
-                lines.append(f"The cheapest stay is {-left:,} EGP over your budget. Try fewer nights or a higher budget."
-                             if en else f"أرخص إقامة أعلى من ميزانيتك بـ {-left:,} جنيه. جرّب ليالي أقل أو ميزانية أعلى.")
+                lines.append(f"- The cheapest stay is {-left:,} EGP over your budget. Try fewer nights or a higher budget."
+                             if en else f"- أرخص إقامة أعلى من ميزانيتك بـ {-left:,} جنيه. جرّب ليالي أقل أو ميزانية أعلى.")
     if kids:
         lines += ["", "With children: start early, rest at midday, and pick a hotel with a pool." if en
                   else "مع الأطفال: ابدأ بدري، ارتاح وقت الظهر، واختار فندق فيه حمام سباحة."]
