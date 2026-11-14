@@ -146,6 +146,50 @@ def show_map(points: list[dict]) -> None:
                use_container_width=True)
 
 
+def plan_stop_html(item: dict) -> str:
+    """One stop of a day plan: the drive to it (if any), its start time, name and duration."""
+    drive = f"<p style='opacity:.75'>{t('lunch_break', ui)}</p>" if item.get("after_lunch") else ""
+    if item["km_from_previous"]:
+        distance = f"{item['km_from_previous']:g}"
+        drive += f"<p style='opacity:.75'>{t('then_drive', ui, km=distance, minutes=item['minutes_from_previous'])}</p>"
+    name = item["title"] if lang == "ar" else item["title_en"]
+    duration = t("about_hours", ui, hours=f"{item['hours']:g}")
+    return f"{drive}<p><span>{item['start']}</span> · <b>{name}</b> ({duration})<br>{item['note']}</p>"
+
+
+def show_route(points: list[dict]) -> None:
+    """A map with the stops joined by a line in visiting order, and the distance and
+    driving time of each leg under it. Falls back to plain markers if the line cannot be drawn."""
+    if len(points) < 2:
+        show_map(points)
+        return
+    try:
+        import pydeck as pdk
+        lats, lons = [p["lat"] for p in points], [p["lon"] for p in points]
+        span = max(max(lats) - min(lats), max(lons) - min(lons))
+        zoom = 13 if span < 0.03 else 11 if span < 0.15 else 9 if span < 0.6 else 7 if span < 2.5 else 5
+        stops = [{"name": f"{n}. {p.get('name', '')}", "lon": p["lon"], "lat": p["lat"]}
+                 for n, p in enumerate(points, 1)]
+        deck = pdk.Deck(
+            map_style=None,
+            initial_view_state=pdk.ViewState(latitude=sum(lats) / len(lats), longitude=sum(lons) / len(lons),
+                                             zoom=zoom),
+            layers=[pdk.Layer("PathLayer", data=[{"path": [[p["lon"], p["lat"]] for p in points]}],
+                              get_path="path", get_color=[212, 175, 55], width_min_pixels=4),
+                    pdk.Layer("ScatterplotLayer", data=stops, get_position="[lon, lat]",
+                              get_fill_color=[26, 38, 57], get_line_color=[212, 175, 55], stroked=True,
+                              line_width_min_pixels=2, radius_min_pixels=7, pickable=True)],
+            tooltip={"text": "{name}"})
+        st.pydeck_chart(deck, height=300)
+    except Exception:  # the line layer is an extra; markers always work
+        show_map(points)
+    rows = planner.legs(points)
+    st.markdown(f"| {t('leg', ui)} | {t('km', ui)} | {t('drive', ui)} |\n|---|---|---|\n" + "\n".join(
+        f"| {n}. {row['from']} ← {n + 1}. {row['to']} | {row['km']:g} | {row['minutes']} {t('minutes', ui)} |"
+        for n, row in enumerate(rows, 1)))
+    st.caption(t("route_estimate", ui, km=f"{sum(r['km'] for r in rows):g}"))
+
+
 # ---- answering -------------------------------------------------------------
 def media_for(question: str) -> dict:
     """A photo, map points and the place itself when the question is clearly about a known place."""
@@ -457,13 +501,10 @@ elif page == "plan":
         if not plan["enough"]:
             st.info(t("plan_short", ui))
         for number, day in enumerate(plan["days"], 1):
-            rows = "".join(
-                f"<p><span>{planner.SLOTS[lang][item['slot']]}:</span> "
-                f"<b>{item['title'] if lang == 'ar' else item['title_en']}</b><br>{item['note']}</p>"
-                for item in day) or f"<p>{t('free_day', ui)}</p>"
+            rows = "".join(plan_stop_html(item) for item in day) or f"<p>{t('free_day', ui)}</p>"
             st.markdown(f'<div class="nb-day"><h4>{t("day", ui)} {number}</h4>{rows}</div>',
                         unsafe_allow_html=True)
-        show_map(plan["points"])
+        show_route(plan["points"])
 
     st.subheader(t("near_title", ui))
     here = st.selectbox(t("near_where", ui), PLACES, format_func=place_name)
@@ -480,7 +521,7 @@ elif page == "plan":
             left.markdown(f"**{place_name(saved_place)}** · {saved_place['city']}")
             right.button(t("trip_remove", ui), key=f"drop_{saved_place['id']}",
                          on_click=drop_place, args=(saved_place["id"],))
-        show_map([{"lat": p["lat"], "lon": p["lon"]} for p in state.trip])
+        show_route([{"name": place_name(p), "lat": p["lat"], "lon": p["lon"]} for p in state.trip])
         listing = "\n".join(f"- {place_name(p)} ({p['city']})" for p in state.trip)
         summary = f"{t('trip_title', ui)} | {config.BOT_NAME}\n{listing}"
         left, right = st.columns(2)
@@ -503,23 +544,24 @@ elif page == "tools":
                           "SELECT * FROM hotels WHERE city = ? ORDER BY price_per_night_egp", (city,))
         city_tours = db.query(config.DB_PATH,
                               "SELECT * FROM tours WHERE city = ? ORDER BY price_per_person_egp", (city,))
-        hotel = st.selectbox(t("hotel", ui), [None] + hotels,
-                             format_func=lambda h: t("no_hotel", ui) if h is None
-                             else f"{h['name']} · {h['price_per_night_egp']:,} {t('egp', ui)}")
         left, right = st.columns(2)
         nights = left.number_input(t("nights", ui), 1, 30, 3, key="budget_nights")
         people = right.number_input(t("people", ui), 1, 20, 2, key="budget_people")
         picked = st.multiselect(t("tours", ui), city_tours,
                                 format_func=lambda x: f"{x['name']} · {x['price_per_person_egp']:,} {t('egp', ui)}")
-        budget = extras.trip_budget(config.DB_PATH, hotel["id"] if hotel else None, nights, people,
-                                    [x["id"] for x in picked])
-        if budget["lines"]:
-            st.markdown("| | | |\n|---|---|---|\n" + "\n".join(
-                f"| {line['item']} | {line['detail']} | {line['cost']:,} {t('egp', ui)} |"
-                for line in budget["lines"]))
-        left, right = st.columns(2)
-        left.metric(t("total", ui), f"{budget['total_egp']:,} {t('egp', ui)}")
-        right.metric(t("per_person", ui), f"{budget['per_person_egp']:,} {t('egp', ui)}")
+        tiers = extras.tier_budgets(config.DB_PATH, city, nights, people, [x["id"] for x in picked])
+        columns = st.columns(3)
+        for column, tier in zip(columns, tiers):
+            column.metric(extras.TIERS[tier["tier"]][lang], f"{tier['total_egp']:,}")
+            column.caption(f"{tier['per_person_egp']:,} {t('per_person', ui)}")
+        header = " | ".join(extras.TIERS[tier["tier"]][lang] for tier in tiers)
+        lines = [f"| {t('budget_item', ui)} | {header} |", "|---|---|---|---|",
+                 f"| {t('hotel', ui)} | " + " | ".join(tier["hotel_name"] or "-" for tier in tiers) + " |"]
+        for key in ("hotel", "food", "transport", "tickets", "tours"):
+            lines.append(f"| {t('cost_' + key, ui)} | " + " | ".join(f"{tier[key]:,}" for tier in tiers) + " |")
+        lines.append(f"| **{t('total', ui)}** | " + " | ".join(f"**{tier['total_egp']:,}**" for tier in tiers) + " |")
+        st.markdown("\n".join(lines))
+        st.caption(t("budget_note", ui))
 
     with tabs[1]:
         rates = cached_rates()

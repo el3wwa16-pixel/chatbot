@@ -60,6 +60,38 @@ def trip_budget(db_path, hotel_id, nights: int, people: int, tour_ids: list) -> 
     return {"lines": lines, "total_egp": total, "per_person_egp": round(total / people)}
 
 
+# Daily spending per person besides the hotel, in EGP. These are rough planning
+# estimates written for this project, not quoted prices.
+TIERS = {
+    "economy": {"ar": "اقتصادي", "en": "Economy", "food": 300, "transport": 100, "tickets": 300},
+    "mid": {"ar": "متوسط", "en": "Mid-range", "food": 600, "transport": 250, "tickets": 450},
+    "luxury": {"ar": "فاخر", "en": "Luxury", "food": 1200, "transport": 600, "tickets": 600},
+}
+
+
+def tier_budgets(db_path, city: str, nights: int, people: int, tour_ids: list | None = None) -> list[dict]:
+    """Three versions of the same trip: cheapest, middle and most expensive hotel in the
+    city, each with matching daily food, local transport and site tickets."""
+    nights, people = max(1, int(nights)), max(1, int(people))
+    days, rooms = nights + 1, math.ceil(people / 2)
+    hotels = db.query(db_path, "SELECT * FROM hotels WHERE city = ? ORDER BY price_per_night_egp", (city,))
+    picks = {"economy": 0, "mid": len(hotels) // 2, "luxury": len(hotels) - 1}
+    tours = 0
+    for tour_id in tour_ids or []:
+        rows = db.query(db_path, "SELECT price_per_person_egp FROM tours WHERE id = ?", (int(tour_id),))
+        tours += rows[0]["price_per_person_egp"] * people if rows else 0
+    out = []
+    for key, tier in TIERS.items():
+        hotel = hotels[picks[key]] if hotels else None
+        parts = {"hotel": hotel["price_per_night_egp"] * nights * rooms if hotel else 0,
+                 "food": tier["food"] * people * days, "transport": tier["transport"] * people * days,
+                 "tickets": tier["tickets"] * people * days, "tours": tours}
+        total = sum(parts.values())
+        out.append({"tier": key, "hotel_name": hotel["name"] if hotel else "", **parts,
+                    "total_egp": total, "per_person_egp": round(total / people)})
+    return out
+
+
 # ---- currency (open.er-api.com: free, no key) --------------------------------
 CURRENCIES = ["USD", "EUR", "GBP", "SAR", "AED", "KWD", "EGP"]
 

@@ -512,22 +512,76 @@ def test_knowledge_geo_and_stops_are_consistent():
 
 def test_planner_builds_days_from_interests(dbp):
     plan = planner.build_plan(_docs(), dbp, "Alexandria", 2, ["history"])
-    assert len(plan["days"]) == 2 and all(len(day) == 3 for day in plan["days"]) and plan["enough"]
-    assert [i["slot"] for i in plan["days"][0]] == [0, 1, 2]
+    assert len(plan["days"]) == 2 and all(plan["days"]) and plan["enough"]
     titles = [i["title"] for day in plan["days"] for i in day]
-    assert "قلعة قايتباي" in titles and len(set(titles)) == len(titles)
+    assert plan["days"][0][0]["title"] == "قلعة قايتباي" and len(set(titles)) == len(titles)
     assert plan["points"] and all(p["lat"] for p in plan["points"]) and plan["city_ar"] == "الإسكندرية"
     food_first = planner.build_plan(_docs(), dbp, "Alexandria", 1, ["food"])["days"][0][0]["title"]
     assert food_first == "أكل الإسكندرية"
 
 
+def test_planner_orders_stops_by_distance_and_fills_the_day(dbp):
+    plan = planner.build_plan(_docs(), dbp, "Alexandria", 2, ["history"])
+    first_day = plan["days"][0]
+    assert first_day[0]["start"] == "09:00" and first_day[0]["km_from_previous"] == 0
+    assert first_day[1]["title"] == "مسجد المرسي أبو العباس"  # the closest place to Qaitbay comes next
+    for day in plan["days"]:
+        clock_hours = [int(i["start"][:2]) + int(i["start"][3:]) / 60 for i in day]
+        assert clock_hours == sorted(clock_hours) and [i["slot"] for i in day] == list(range(len(day)))
+        lunches = sum(i["after_lunch"] for i in day)
+        used = sum(i["hours"] + i["minutes_from_previous"] / 60 for i in day) + lunches * planner.LUNCH_HOURS
+        assert used <= planner.DAY_HOURS or len(day) == 1  # a day never overruns its hours
+        assert lunches <= 1 and not day[0]["after_lunch"]
+        for item in day:
+            if item["after_lunch"]:
+                assert item["start"] >= "13:30"  # lunch pushes the next visit past 12:30 + 1 h
+        for item in day[1:]:
+            if item["lat"] is not None:
+                assert item["km_from_previous"] > 0 and item["minutes_from_previous"] >= 5
+    located = [i for day in plan["days"] for i in day if i["lat"] is not None]
+    assert plan["total_km"] == round(sum(i["km_from_previous"] for i in located), 1) > 0
+
+    # the route is shorter than visiting the same places in their stored order
+    def path_km(items):
+        return sum(travel.distance_km(a["lat"], a["lon"], b["lat"], b["lon"]) for a, b in zip(items, items[1:]))
+    alex = [d for d in _docs() if d.get("city") == "Alexandria" and "lat" in d]
+    assert path_km(planner._in_visit_order(alex)) < path_km(alex)
+
+
+def test_travel_time_and_legs():
+    assert planner.travel_minutes(0) == 0 and planner.travel_minutes(1) >= 5
+    assert planner.travel_minutes(200) > planner.travel_minutes(20) > planner.travel_minutes(2)
+    assert planner.clock(9) == "09:00" and planner.clock(13.75) == "13:45"
+    rows = planner.legs([{"name": "a", "lat": 30.0, "lon": 31.0}, {"name": "b", "lat": 30.0, "lon": 31.1},
+                         {"name": "c", "lat": 30.1, "lon": 31.1}])
+    assert [(r["from"], r["to"]) for r in rows] == [("a", "b"), ("b", "c")]
+    assert all(r["km"] > 0 and r["minutes"] > 0 for r in rows) and planner.legs([{"lat": 1, "lon": 1}]) == []
+
+
 def test_planner_handles_small_cities_and_limits(dbp):
-    plan = planner.build_plan(_docs(), dbp, "Hurghada", 7, [])
+    plan = planner.build_plan(_docs(), dbp, "Marsa Alam", 7, [])
     assert len(plan["days"]) == 7 and plan["days"][0] and not plan["enough"] and plan["days"][-1] == []
     assert any(i["kind"] == "tour" for day in plan["days"] for i in day)
     assert len(planner.build_plan(_docs(), dbp, "Cairo", 99, ["history"])["days"]) == 7
     cairo = [i["title"] for d in planner.build_plan(_docs(), dbp, "Cairo", 7, ["history"])["days"] for i in d]
     assert "أهرامات الجيزة وأبو الهول" in cairo  # Giza counts as part of a Cairo trip
+
+
+def test_three_budget_tiers(dbp):
+    tiers = extras.tier_budgets(dbp, "Alexandria", 3, 3, [])
+    assert [x["tier"] for x in tiers] == ["economy", "mid", "luxury"]
+    assert tiers[0]["total_egp"] < tiers[1]["total_egp"] < tiers[2]["total_egp"]
+    hotels = tools.search_hotels(dbp, "Alexandria")["hotels"]
+    assert tiers[0]["hotel_name"] == hotels[0]["name"] and tiers[2]["hotel_name"] == hotels[-1]["name"]
+    eco = tiers[0]
+    assert eco["hotel"] == hotels[0]["price_per_night_egp"] * 3 * 2 and eco["total_egp"] == sum(eco[k] for k in ("hotel", "food", "transport", "tickets", "tours"))
+    # 3 nights, 3 people: 2 rooms and 4 days of daily costs
+    assert eco["food"] == extras.TIERS["economy"]["food"] * 3 * 4 and eco["tours"] == 0
+    assert eco["per_person_egp"] == round(eco["total_egp"] / 3)
+    tour = tools.search_tours(dbp, "Alexandria")["tours"][0]
+    with_tour = extras.tier_budgets(dbp, "Alexandria", 3, 3, [tour["id"], 9999])
+    assert with_tour[0]["tours"] == tour["price_per_person_egp"] * 3
+    assert with_tour[0]["total_egp"] == eco["total_egp"] + with_tour[0]["tours"]
 
 
 def test_trip_budget(dbp):
@@ -690,7 +744,7 @@ def test_distance_and_nearest():
     docs = _docs()
     qaitbay = next(d for d in docs if d["id"] == "qaitbay")
     close = travel.nearest(docs, qaitbay["lat"], qaitbay["lon"], 3, exclude_id="qaitbay")
-    assert [c["doc"]["id"] for c in close][0] == "mursi-abu-al-abbas" and close[0]["km"] < 2
+    assert {c["doc"]["id"] for c in close[:2]} == {"alex-food", "mursi-abu-al-abbas"} and close[0]["km"] < 2
     assert [c["km"] for c in close] == sorted(c["km"] for c in close)
     assert all(c["doc"]["city"] == "Alexandria" for c in close)
 
